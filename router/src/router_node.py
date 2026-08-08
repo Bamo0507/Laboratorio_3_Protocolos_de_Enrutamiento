@@ -13,8 +13,11 @@ from control_messages import (
     build_lsa_message,
     parse_control_message,
 )
+from dijkstra import calculate_shortest_routes
 from message_framing import receive_framed_text, send_framed_text
+from network_graph import GraphLink, build_network_graph
 from router_config import NeighborConfiguration, RouterConfiguration
+from routing_table import RoutingTableRow, write_routing_table
 
 
 NEIGHBOR_DISCOVERY_INTERVAL_IN_SECONDS = 5
@@ -36,6 +39,7 @@ class RouterNode:
         self.local_lsa_message = ""
         self.latest_lsa_sequence_by_origin: dict[str, int] = {}
         self.latest_lsa_by_origin: dict[str, dict[str, Any]] = {}
+        self.network_graph: dict[str, list[GraphLink]] = {}
 
     def start(self) -> None:
         self.start_listening()
@@ -140,6 +144,7 @@ class RouterNode:
         )
         local_lsa_data = parse_control_message(self.local_lsa_message)
         self.store_lsa(local_lsa_data)
+        self.rebuild_network_graph()
         print(
             f"[ROUTER {self.configuration.router_id}] "
             f"LSA local preparada con secuencia {self.local_lsa_sequence}."
@@ -185,6 +190,7 @@ class RouterNode:
             return
 
         self.store_lsa(lsa_message_data)
+        self.rebuild_network_graph()
         print(
             f"[ROUTER {self.configuration.router_id}] "
             f"LSA nueva de {origin_router_id} secuencia {sequence} almacenada."
@@ -203,6 +209,59 @@ class RouterNode:
 
         self.latest_lsa_sequence_by_origin[origin_router_id] = sequence
         self.latest_lsa_by_origin[origin_router_id] = dict(lsa_message_data)
+
+    def rebuild_network_graph(self) -> None:
+        self.network_graph = build_network_graph(
+            self.latest_lsa_by_origin
+        )
+        self.generate_routing_table()
+        known_router_count = len(self.network_graph)
+        known_link_count = sum(
+            len(graph_links)
+            for graph_links in self.network_graph.values()
+        )
+        print(
+            f"[ROUTER {self.configuration.router_id}] "
+            f"Grafo actualizado: {known_router_count} routers y "
+            f"{known_link_count} enlaces conocidos."
+        )
+
+    def generate_routing_table(self) -> None:
+        shortest_routes = calculate_shortest_routes(
+            self.network_graph,
+            self.configuration.router_id,
+        )
+        routing_table_rows: list[RoutingTableRow] = []
+
+        for shortest_route in shortest_routes:
+            next_hop_configuration = self.find_neighbor_configuration(
+                shortest_route.next_hop_router_id
+            )
+
+            if next_hop_configuration is None:
+                raise ValueError(
+                    "La ruta calculada no inicia con un vecino directo: "
+                    f"{shortest_route.next_hop_router_id}."
+                )
+
+            routing_table_rows.append(
+                RoutingTableRow(
+                    destination_router_id=shortest_route.destination_router_id,
+                    next_hop_router_id=shortest_route.next_hop_router_id,
+                    next_hop_ip=next_hop_configuration.ip,
+                    next_hop_port=next_hop_configuration.port,
+                    total_cost=shortest_route.total_cost,
+                )
+            )
+
+        routing_table_path = write_routing_table(
+            self.configuration.router_id,
+            routing_table_rows,
+        )
+        print(
+            f"[ROUTER {self.configuration.router_id}] "
+            f"Tabla de enrutamiento actualizada en {routing_table_path}."
+        )
 
     def flood_lsa_to_neighbors(
         self,
