@@ -1,4 +1,5 @@
 import argparse
+import time
 
 from router_config import load_router_configuration
 from router_node import RouterNode
@@ -19,8 +20,10 @@ def main() -> None:
     router_node = RouterNode(router_configuration)
 
     try:
-        router_node.start_listening()
-        router_node.accept_connections()
+        router_node.start()
+
+        while True:
+            time.sleep(1)
     except KeyboardInterrupt:
         print("\nRouter detenido por el usuario.")
     finally:
