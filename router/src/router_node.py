@@ -1,6 +1,7 @@
 import socket
 import threading
 import time
+from queue import Empty, Queue
 from typing import Any
 
 from control_messages import (
@@ -13,11 +14,19 @@ from control_messages import (
     build_lsa_message,
     parse_control_message,
 )
+from bit_noise import apply_bit_flip_noise
+from data_decoding import decode_protected_codeword_bits
+from data_encoding import encode_data_message
+from data_messages import DataMessage
 from dijkstra import calculate_shortest_routes
 from message_framing import receive_framed_text, send_framed_text
 from network_graph import GraphLink, build_network_graph
 from router_config import NeighborConfiguration, RouterConfiguration
-from routing_table import RoutingTableRow, write_routing_table
+from routing_table import (
+    RoutingTableRow,
+    read_routing_table,
+    write_routing_table,
+)
 
 
 NEIGHBOR_DISCOVERY_INTERVAL_IN_SECONDS = 5
@@ -31,6 +40,8 @@ class RouterNode:
         self.keep_running = threading.Event()
         self.listener_thread: threading.Thread | None = None
         self.neighbor_discovery_thread: threading.Thread | None = None
+        self.forwarding_thread: threading.Thread | None = None
+        self.pending_data_bits: Queue[str] = Queue()
         self.neighbor_availability: dict[str, bool | None] = {
             neighbor.router_id: None
             for neighbor in self.configuration.neighbors
@@ -47,6 +58,7 @@ class RouterNode:
         self.keep_running.set()
         self.start_listener_thread()
         self.start_neighbor_discovery_thread()
+        self.start_forwarding_thread()
 
     def start_listening(self) -> None:
         listening_address = self.configuration.listening_address
@@ -74,6 +86,13 @@ class RouterNode:
             name=f"router-{self.configuration.router_id}-neighbor-discovery",
         )
         self.neighbor_discovery_thread.start()
+
+    def start_forwarding_thread(self) -> None:
+        self.forwarding_thread = threading.Thread(
+            target=self.process_pending_data_bits,
+            name=f"router-{self.configuration.router_id}-forwarding",
+        )
+        self.forwarding_thread.start()
 
     def accept_connections(self) -> None:
         if self.listener_socket is None:
@@ -108,10 +127,7 @@ class RouterNode:
             return
 
         if not received_text.startswith("{"):
-            print(
-                f"[ROUTER {self.configuration.router_id}] "
-                "Se recibió DATA, pero el forwarding aún no está implementado."
-            )
+            self.pending_data_bits.put(received_text)
             return
 
         try:
@@ -135,6 +151,130 @@ class RouterNode:
 
         if control_message["type"] == LSA_MESSAGE_TYPE:
             self.process_received_lsa(control_message)
+
+    def process_received_data_bits(self, protected_codeword_bits: str) -> None:
+        try:
+            data_message = decode_protected_codeword_bits(
+                protected_codeword_bits
+            )
+        except ValueError as exception:
+            print(
+                f"[ROUTER {self.configuration.router_id}] "
+                f"DATA descartado: no fue posible recuperarlo. {exception}"
+            )
+            return
+
+        destination_gateway_id = data_message.destination.gateway_id
+
+        if destination_gateway_id == self.configuration.router_id:
+            self.deliver_data_to_attached_host(data_message)
+            return
+
+        self.forward_data_to_next_router(data_message)
+
+    def process_pending_data_bits(self) -> None:
+        while self.keep_running.is_set():
+            try:
+                protected_codeword_bits = self.pending_data_bits.get(timeout=1)
+            except Empty:
+                continue
+
+            try:
+                self.process_received_data_bits(protected_codeword_bits)
+            finally:
+                self.pending_data_bits.task_done()
+
+    def forward_data_to_next_router(self, data_message: DataMessage) -> None:
+        destination_gateway_id = data_message.destination.gateway_id
+
+        try:
+            routing_table_by_destination = read_routing_table(
+                self.configuration.router_id
+            )
+        except ValueError as exception:
+            print(
+                f"[ROUTER {self.configuration.router_id}] "
+                f"DATA descartado: no fue posible leer el CSV. {exception}"
+            )
+            return
+
+        routing_table_row = routing_table_by_destination.get(
+            destination_gateway_id
+        )
+
+        if routing_table_row is None:
+            print(
+                f"[ROUTER {self.configuration.router_id}] "
+                f"DATA descartado: no existe ruta hacia {destination_gateway_id}."
+            )
+            return
+
+        self.send_data_message(
+            data_message,
+            target_ip=routing_table_row.next_hop_ip,
+            target_port=routing_table_row.next_hop_port,
+            target_description=(
+                f"router {routing_table_row.next_hop_router_id}"
+            ),
+        )
+
+    def deliver_data_to_attached_host(
+        self,
+        data_message: DataMessage,
+    ) -> None:
+        attached_host = self.configuration.attached_host
+
+        if attached_host is None:
+            print(
+                f"[ROUTER {self.configuration.router_id}] "
+                "DATA descartado: este router no tiene un host conectado."
+            )
+            return
+
+        if data_message.destination.host_id != attached_host.host_id:
+            print(
+                f"[ROUTER {self.configuration.router_id}] "
+                "DATA descartado: el host destino no coincide con el host "
+                "conectado al router."
+            )
+            return
+
+        self.send_data_message(
+            data_message,
+            target_ip=attached_host.ip,
+            target_port=attached_host.port,
+            target_description=f"host {attached_host.host_id}",
+        )
+
+    def send_data_message(
+        self,
+        data_message: DataMessage,
+        target_ip: str,
+        target_port: int,
+        target_description: str,
+    ) -> None:
+        protected_codeword_bits = encode_data_message(data_message)
+        noisy_codeword_bits = apply_bit_flip_noise(
+            protected_codeword_bits,
+            data_message.noise.bit_flip_probability,
+        )
+
+        try:
+            with socket.create_connection(
+                (target_ip, target_port),
+                timeout=CONNECTION_TIMEOUT_IN_SECONDS,
+            ) as target_socket:
+                send_framed_text(target_socket, noisy_codeword_bits)
+
+            print(
+                f"[ROUTER {self.configuration.router_id}] "
+                f"DATA enviada a {target_description}."
+            )
+        except OSError as exception:
+            print(
+                f"[ROUTER {self.configuration.router_id}] "
+                f"No fue posible enviar DATA a {target_description}: {exception}"
+            )
 
     def prepare_local_lsa(self) -> None:
         self.local_lsa_message = build_lsa_message(
@@ -460,6 +600,7 @@ class RouterNode:
 
         self.wait_for_thread(self.listener_thread)
         self.wait_for_thread(self.neighbor_discovery_thread)
+        self.wait_for_thread(self.forwarding_thread)
 
     def wait_for_thread(self, thread: threading.Thread | None) -> None:
         if thread is not None and thread is not threading.current_thread():
