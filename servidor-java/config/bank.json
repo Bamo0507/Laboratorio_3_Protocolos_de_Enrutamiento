@@ -1,0 +1,6 @@
+{
+  "host_id": "BANK",
+  "listen": { "ip": "127.0.0.1", "port": 8002 },
+  "gateway": { "router_id": "X", "ip": "127.0.0.1", "port": 9003 },
+  "remote_host": { "host_id": "ATM", "gateway_id": "U" }
+}
