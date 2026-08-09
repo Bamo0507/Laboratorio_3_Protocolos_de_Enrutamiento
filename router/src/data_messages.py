@@ -99,17 +99,17 @@ def parse_data_message(serialized_message: str) -> DataMessage:
         packet_id=read_required_text(message_data, "packet_id"),
         session_id=read_required_text(message_data, "session_id"),
         origin=HostRoute(
-            host_id=read_required_text(origin_data, "origin.host_id"),
-            gateway_id=read_required_text(origin_data, "origin.gateway_id"),
+            host_id=read_required_text(origin_data, "host_id"),
+            gateway_id=read_required_text(origin_data, "gateway_id"),
         ),
         destination=HostRoute(
             host_id=read_required_text(
                 destination_data,
-                "destination.host_id",
+                "host_id",
             ),
             gateway_id=read_required_text(
                 destination_data,
-                "destination.gateway_id",
+                "gateway_id",
             ),
         ),
         noise=NoiseConfiguration(
@@ -117,7 +117,7 @@ def parse_data_message(serialized_message: str) -> DataMessage:
         ),
         payload=BankPayload(
             command=read_bank_command(payload_data),
-            payload=read_text(payload_data, "payload.payload"),
+            payload=read_text(payload_data, "payload"),
         ),
     )
     validate_data_message(data_message)
@@ -194,7 +194,7 @@ def validate_bit_flip_probability(probability: Any) -> None:
 
 
 def read_bank_command(payload_data: dict[str, Any]) -> str:
-    command = read_required_text(payload_data, "payload.command")
+    command = read_required_text(payload_data, "command")
 
     if command not in SUPPORTED_BANK_COMMANDS:
         raise ValueError(f"El comando bancario no es reconocido: {command}.")

@@ -1,0 +1,9 @@
+destination_router_id,next_hop_router_id,next_hop_ip,next_hop_port,total_cost
+A,A,127.0.0.1,9001,1
+B,A,127.0.0.1,9001,8
+C,A,127.0.0.1,9001,8
+D,D,127.0.0.1,9004,6
+E,D,127.0.0.1,9004,7
+F,D,127.0.0.1,9004,7
+G,D,127.0.0.1,9004,10
+H,D,127.0.0.1,9004,11

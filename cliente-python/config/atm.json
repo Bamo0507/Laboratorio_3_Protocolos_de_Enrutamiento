@@ -1,6 +1,6 @@
 {
   "host_id": "ATM",
   "listen": { "ip": "127.0.0.1", "port": 8001 },
-  "gateway": { "router_id": "U", "ip": "127.0.0.1", "port": 9001 },
-  "remote_host": { "host_id": "BANK", "gateway_id": "X" }
+  "gateway": { "router_id": "F", "ip": "127.0.0.1", "port": 9006 },
+  "remote_host": { "host_id": "BANK", "gateway_id": "C" }
 }

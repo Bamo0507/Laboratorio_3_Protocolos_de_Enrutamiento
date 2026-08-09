@@ -79,8 +79,8 @@ def read_listening_address(
     listening_data = read_required_object(configuration_data, "listen")
 
     return ListeningAddress(
-        ip=read_required_text(listening_data, "listen.ip"),
-        port=read_required_port(listening_data, "listen.port"),
+        ip=read_required_text(listening_data, "ip"),
+        port=read_required_port(listening_data, "port"),
     )
 
 
@@ -102,7 +102,7 @@ def read_neighbors(
 
         neighbor_router_id = read_required_text(
             neighbor_data,
-            f"{field_prefix}.router_id",
+            "router_id",
         )
 
         if neighbor_router_id == router_id:
@@ -121,9 +121,9 @@ def read_neighbors(
         neighbors.append(
             NeighborConfiguration(
                 router_id=neighbor_router_id,
-                ip=read_required_text(neighbor_data, f"{field_prefix}.ip"),
-                port=read_required_port(neighbor_data, f"{field_prefix}.port"),
-                cost=read_required_cost(neighbor_data, f"{field_prefix}.cost"),
+                ip=read_required_text(neighbor_data, "ip"),
+                port=read_required_port(neighbor_data, "port"),
+                cost=read_required_cost(neighbor_data, "cost"),
             )
         )
 
@@ -142,7 +142,7 @@ def read_attached_host(
         return None
 
     ensure_json_object(attached_host_data, "attached_host")
-    role = read_required_text(attached_host_data, "attached_host.role")
+    role = read_required_text(attached_host_data, "role")
 
     if role not in VALID_ATTACHED_HOST_ROLES:
         valid_roles_text = ", ".join(sorted(VALID_ATTACHED_HOST_ROLES))
@@ -153,9 +153,9 @@ def read_attached_host(
 
     return AttachedHostConfiguration(
         role=role,
-        host_id=read_required_text(attached_host_data, "attached_host.host_id"),
-        ip=read_required_text(attached_host_data, "attached_host.ip"),
-        port=read_required_port(attached_host_data, "attached_host.port"),
+        host_id=read_required_text(attached_host_data, "host_id"),
+        ip=read_required_text(attached_host_data, "ip"),
+        port=read_required_port(attached_host_data, "port"),
     )
 
 

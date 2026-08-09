@@ -1,0 +1,9 @@
+{
+  "router_id": "G",
+  "listen": { "ip": "127.0.0.1", "port": 9007 },
+  "neighbors": [
+    { "router_id": "E", "ip": "127.0.0.1", "port": 9005, "cost": 4 },
+    { "router_id": "F", "ip": "127.0.0.1", "port": 9006, "cost": 3 }
+  ],
+  "attached_host": null
+}

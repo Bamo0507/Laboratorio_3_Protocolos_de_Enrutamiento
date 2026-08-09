@@ -143,7 +143,7 @@ def validate_lsa_message(message_data: dict[str, Any]) -> None:
 
         neighbor_router_id = read_required_text(
             link_data,
-            f"{field_prefix}.neighbor_router_id",
+            "neighbor_router_id",
         )
 
         if neighbor_router_id in registered_neighbor_ids:
@@ -153,7 +153,7 @@ def validate_lsa_message(message_data: dict[str, Any]) -> None:
             )
 
         registered_neighbor_ids.add(neighbor_router_id)
-        read_required_cost(link_data, f"{field_prefix}.cost")
+        read_required_cost(link_data, "cost")
 
 
 def read_required_text(message_data: dict[str, Any], field_name: str) -> str:

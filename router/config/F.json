@@ -1,0 +1,16 @@
+{
+  "router_id": "F",
+  "listen": { "ip": "127.0.0.1", "port": 9006 },
+  "neighbors": [
+    { "router_id": "B", "ip": "127.0.0.1", "port": 9002, "cost": 2 },
+    { "router_id": "D", "ip": "127.0.0.1", "port": 9004, "cost": 1 },
+    { "router_id": "G", "ip": "127.0.0.1", "port": 9007, "cost": 3 },
+    { "router_id": "H", "ip": "127.0.0.1", "port": 9008, "cost": 4 }
+  ],
+  "attached_host": {
+    "role": "CLIENT",
+    "host_id": "ATM",
+    "ip": "127.0.0.1",
+    "port": 8001
+  }
+}
